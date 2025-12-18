@@ -296,7 +296,7 @@ def get_assessment_map() -> dict:
     return assessment_mappings
 
 
-def get_fallback_skills() -> list:
+def get_fallback_skill() -> list:
     """
     Return list of fallback skill keywords for basic extraction
     
