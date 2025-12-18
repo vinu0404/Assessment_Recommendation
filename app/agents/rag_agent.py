@@ -13,7 +13,7 @@ from app.utils.formatters import extract_json_from_response
 
 class RAGAgent(BaseAgent):
     """
-    RAG Agent with improved retrieval and selection
+    RAG Agent with improved retrieval and intelligent reranking
     """
     
     def __init__(self):
@@ -36,7 +36,7 @@ class RAGAgent(BaseAgent):
     
     async def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Retrieve and rank assessments based on enhanced query
+        Retrieve and rank assessments with improved matching
         
         Args:
             state: Graph state with 'enhanced_query' field
@@ -60,17 +60,9 @@ class RAGAgent(BaseAgent):
         })
         
         try:
-            search_query = self._build_search_query(enhanced_query)
-            self.logger.info(f"Search query: {search_query[:200]}...")
-            print("\n" + "="*80)
-            print("ENHANCED QUERY DETAILS")
-            print(f"Original query: {enhanced_query.original_query[:100]}")
-            print(f"Cleaned query: {enhanced_query.cleaned_query[:200]}")
-            print(f"Extracted skills: {enhanced_query.extracted_skills[:10]}")
-            print(f"Key requirements: {enhanced_query.key_requirements[:5]}")
-            print(f"Final search query: {search_query[:300]}")
+            search_query = enhanced_query.cleaned_query
             
-
+            self.logger.info(f"Vector search query: {search_query[:200]}...")
             retrieved = await self.vector_store.search_assessments(
                 query=search_query,
                 top_k=self.top_k_retrieve
@@ -89,7 +81,7 @@ class RAGAgent(BaseAgent):
                 f"Scores: [{min(a.get('similarity_score', 0) for a in retrieved):.3f} - "
                 f"{max(a.get('similarity_score', 0) for a in retrieved):.3f}]"
             )
-
+            
             if enhanced_query.extracted_duration:
                 retrieved = self._filter_by_duration(
                     retrieved,
@@ -97,12 +89,8 @@ class RAGAgent(BaseAgent):
                 )
                 self.logger.info(f"After duration filter: {len(retrieved)} assessments")
             
-            if self.similarity_threshold > 0:
-                filtered = self._filter_by_similarity_threshold(retrieved)
-                self.logger.info(f"After threshold filter: {len(filtered)} assessments")
-            else:
-                filtered = retrieved
-                self.logger.info(f"No threshold filter - passing all {len(filtered)} to LLM")
+            filtered = self._filter_by_similarity_threshold(retrieved)
+            self.logger.info(f"After threshold filter: {len(filtered)} assessments")
             
             if self.enable_llm_reranking and len(filtered) > 0:
                 reranked = await self._rerank_with_llm(filtered, enhanced_query)
@@ -113,13 +101,14 @@ class RAGAgent(BaseAgent):
                     key=lambda x: x.get('similarity_score', 0),
                     reverse=True
                 )
-
-            final_recommendations = self._select_top_k(reranked)
+            
+            final_recommendations = self._select_final_recommendations(
+                reranked,
+                enhanced_query
+            )
             
             self.logger.info(
-                f"Final: {len(final_recommendations)} assessments - "
-                f"Scores: [{final_recommendations[0].get('combined_score', final_recommendations[0].get('similarity_score', 0)):.3f} - "
-                f"{final_recommendations[-1].get('combined_score', final_recommendations[-1].get('similarity_score', 0)):.3f}]"
+                f"Final: {len(final_recommendations)} assessments"
             )
             
             stats = self._calculate_statistics(final_recommendations)
@@ -127,8 +116,6 @@ class RAGAgent(BaseAgent):
             self.log_output({
                 'final_count': len(final_recommendations),
                 'avg_score': stats['avg_score'],
-                'min_score': stats['min_score'],
-                'max_score': stats['max_score'],
                 'test_type_distribution': stats['test_type_distribution']
             })
             
@@ -145,31 +132,12 @@ class RAGAgent(BaseAgent):
                 'error_message': f"RAG error: {str(e)}"
             })
     
-    def _build_search_query(self, enhanced_query: EnhancedQuery) -> str:
-        """
-        Build search query to generate assessment terminology
-        """
-        parts = []
-        
-        if enhanced_query.cleaned_query:
-            parts.append(enhanced_query.cleaned_query)
-        
-        if enhanced_query.extracted_skills:
-            skills_text = ", ".join(enhanced_query.extracted_skills[:15])
-            parts.append(skills_text)
-        
-        if enhanced_query.extracted_job_levels:
-            levels_text = ", ".join(enhanced_query.extracted_job_levels)
-            parts.append(f"Level: {levels_text}")
-        
-        return " | ".join(parts)
-    
     def _filter_by_duration(
         self,
         assessments: List[Dict[str, Any]],
         max_duration: int
     ) -> List[Dict[str, Any]]:
-        """Filter by duration constraint - HARD constraint"""
+        """Filter by duration constraint (strict)"""
         return [
             a for a in assessments 
             if a.get('duration') is None or a.get('duration') <= max_duration
@@ -179,7 +147,7 @@ class RAGAgent(BaseAgent):
         self,
         assessments: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """Filter by similarity threshold with fallback logic"""
+        """Filter by similarity threshold with fallback"""
         filtered = [
             a for a in assessments 
             if a.get('similarity_score', 0) >= self.similarity_threshold
@@ -188,11 +156,6 @@ class RAGAgent(BaseAgent):
         if len(filtered) >= self.min_select:
             return filtered
         
-        self.logger.warning(
-            f"Primary threshold yielded only {len(filtered)} results. "
-            f"Trying fallback ({self.similarity_threshold_fallback:.2f})"
-        )
-        
         filtered_fallback = [
             a for a in assessments 
             if a.get('similarity_score', 0) >= self.similarity_threshold_fallback
@@ -200,12 +163,6 @@ class RAGAgent(BaseAgent):
         
         if len(filtered_fallback) >= self.min_select:
             return filtered_fallback
-        
-        self.logger.warning(
-            f"Even fallback yielded only {len(filtered_fallback)}. "
-            f"Returning top {self.max_select} by score"
-        )
-        
         return sorted(
             assessments,
             key=lambda x: x.get('similarity_score', 0),
@@ -218,85 +175,108 @@ class RAGAgent(BaseAgent):
         enhanced_query: EnhancedQuery
     ) -> List[Dict[str, Any]]:
         """
-        LLM-based reranking - processes ALL candidates with domain reasoning
+        LLM-based reranking with improved prompt
         """
-        if not assessments:
-            return []
+        if len(assessments) <= self.max_select:
+            return assessments
         
         try:
             assessments_text = "\n\n".join([
                 f"ID: {i}\n"
                 f"Name: {a.get('name', 'Unknown')}\n"
-                f"Description: {a.get('description', 'No description')[:150]}...\n"
+                f"Description: {a.get('description', 'No description')}\n"
                 f"Test Types: {', '.join(a.get('test_type', []))}\n"
-                f"Duration: {a.get('duration', 'N/A')} min\n"
+                f"Duration: {a.get('duration', 'Unknown')} minutes\n"
+                f"Job Levels: {a.get('job_levels', 'Not specified')}\n"
                 f"Vector Score: {a.get('similarity_score', 0):.3f}"
-                for i, a in enumerate(assessments)  
+                for i, a in enumerate(assessments[:20])
             ])
             
             prompt = get_reranking_prompt(
-                query=enhanced_query.cleaned_query,
-                skills=enhanced_query.extracted_skills[:15],
+                query=enhanced_query.original_query,
+                skills=enhanced_query.extracted_skills,
                 test_types=enhanced_query.required_test_types,
                 job_levels=enhanced_query.extracted_job_levels,
-                duration_constraint=f"{enhanced_query.extracted_duration} min" if enhanced_query.extracted_duration else "None",
+                duration_constraint=f"{enhanced_query.extracted_duration} minutes" if enhanced_query.extracted_duration else "None",
                 assessments=assessments_text,
-                top_k=min(self.max_select, len(assessments))
+                top_k=self.max_select
             )
-            
             response = await self.llm_service.generate_text(
                 prompt=prompt,
                 system_instruction=RAG_SYSTEM_INSTRUCTION
             )
-            
             rankings = extract_json_from_response(response)
             if isinstance(rankings, dict):
                 rankings = rankings.get('rankings', [])
-            
             reranked = []
             for ranking in rankings:
                 idx = ranking.get('id')
-                if idx is not None and 0 <= idx < len(assessments):
+                if 0 <= idx < len(assessments):
                     assessment = assessments[idx].copy()
                     assessment['llm_score'] = ranking.get('score', 0.5)
                     assessment['llm_reason'] = ranking.get('reason', '')
-                    
                     assessment['combined_score'] = (
-                        0.1 * assessment.get('similarity_score', 0) +  
-                        0.9 * assessment['llm_score']
+                        0.0 * assessment.get('similarity_score', 0) + 
+                        1 * assessment['llm_score']
                     )
                     reranked.append(assessment)
-            
             reranked.sort(key=lambda x: x.get('combined_score', 0), reverse=True)
             
             self.logger.info(
-                f"LLM reranked {len(reranked)}/{len(assessments)} assessments - "
-                f"Top score: {reranked[0].get('combined_score', 0):.3f}"
+                f"LLM reranked {len(reranked)} assessments"
             )
             
             return reranked
             
         except Exception as e:
-            self.logger.error(f"LLM reranking failed: {e}", exc_info=True)
+            self.logger.warning(f"LLM reranking failed: {e}, using vector scores")
             return sorted(
                 assessments,
                 key=lambda x: x.get('similarity_score', 0),
                 reverse=True
             )
     
-    def _select_top_k(
+    def _select_final_recommendations(
         self,
-        assessments: List[Dict[str, Any]]
+        assessments: List[Dict[str, Any]],
+        enhanced_query: EnhancedQuery
     ) -> List[Dict[str, Any]]:
         """
-        Select top K assessments
+        Select final recommendations ensuring diversity and coverage
         """
-        if not assessments:
-            return []
-        count = min(len(assessments), self.max_select)
-        count = max(count, min(self.min_select, len(assessments)))
+        if len(assessments) <= self.min_select:
+            return assessments
         
-        return assessments[:count]
+        selected = []
+        seen_names = set()
+        test_type_counts = Counter()
+        for assessment in assessments:
+            if len(selected) >= self.max_select:
+                break
+            
+            name = assessment.get('name', '')
+            if name in seen_names:
+                continue
+            test_types = assessment.get('test_type', [])
+            max_per_type = 3  
+            type_ok = all(test_type_counts[tt] < max_per_type for tt in test_types)
+            
+            if type_ok or len(selected) < self.min_select:
+                selected.append(assessment)
+                seen_names.add(name)
+                for tt in test_types:
+                    test_type_counts[tt] += 1
+        
+        if len(selected) < self.min_select:
+            remaining = [a for a in assessments if a.get('name') not in seen_names]
+            selected.extend(remaining[:self.min_select - len(selected)])
+        
+        selected.sort(
+            key=lambda x: x.get('combined_score', x.get('similarity_score', 0)),
+            reverse=True
+        )
+        
+        return selected
     
     def _calculate_statistics(
         self,
@@ -328,7 +308,9 @@ class RAGAgent(BaseAgent):
             'test_type_distribution': dict(counter)
         }
 
+
 rag_agent = RAGAgent()
+
 
 def get_rag_agent() -> RAGAgent:
     """Get RAG agent instance"""

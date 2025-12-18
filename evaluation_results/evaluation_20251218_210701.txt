@@ -1,0 +1,132 @@
+================================================================================
+SHL ASSESSMENT RECOMMENDATION SYSTEM - EVALUATION
+================================================================================
+Loaded 10 training queries
+
+Evaluating on training set (10 queries)...
+
+[1/10] Processing query...
+Query: I am hiring for Java developers who can also collaborate effectively with my business teams. Looking...
+Ground Truth: https://www.shl.com/products/product-catalog/view/interpersonal-communications/
+Predictions: 4 assessments returned
+  Recall@1: 0.00
+  Recall@3: 0.00
+  Recall@5: 0.00
+  Recall@8: 0.00
+  Recall@10: 0.00
+INCORRECT: Ground truth not in top 5
+
+[2/10] Processing query...
+Query: I want to hire new graduates for a sales role in my company, the budget is for about an hour for eac...
+Ground Truth: https://www.shl.com/solutions/products/product-catalog/view/english-comprehension-new/
+Predictions: 7 assessments returned
+  Recall@1: 1.00
+  Recall@3: 1.00
+  Recall@5: 1.00
+  Recall@8: 1.00
+  Recall@10: 1.00
+CORRECT: Ground truth found in predictions
+
+[3/10] Processing query...
+Query: I am looking for a COO for my company in China and I want to see if they are culturally a right fit ...
+Ground Truth: https://www.shl.com/solutions/products/product-catalog/view/global-skills-assessment/
+Predictions: 8 assessments returned
+  Recall@1: 1.00
+  Recall@3: 1.00
+  Recall@5: 1.00
+  Recall@8: 1.00
+  Recall@10: 1.00
+CORRECT: Ground truth found in predictions
+
+[4/10] Processing query...
+Query: KEY RESPONSIBITILES:
+
+Manage the sound-scape of the station through appropriate creative and marketi...
+Ground Truth: https://www.shl.com/products/product-catalog/view/interpersonal-communications/
+Predictions: 8 assessments returned
+  Recall@1: 1.00
+  Recall@3: 1.00
+  Recall@5: 1.00
+  Recall@8: 1.00
+  Recall@10: 1.00
+CORRECT: Ground truth found in predictions
+
+[5/10] Processing query...
+Query: Content Writer required, expert in English and SEO....
+Ground Truth: https://www.shl.com/solutions/products/product-catalog/view/search-engine-optimization-new/
+Predictions: 9 assessments returned
+  Recall@1: 1.00
+  Recall@3: 1.00
+  Recall@5: 1.00
+  Recall@8: 1.00
+  Recall@10: 1.00
+CORRECT: Ground truth found in predictions
+
+[6/10] Processing query...
+Query: Find me 1 hour long assesment for the below job at SHL
+Job Description
+
+ Join a community that is sh...
+Ground Truth: https://www.shl.com/solutions/products/product-catalog/view/manual-testing-new/
+Predictions: 6 assessments returned
+  Recall@1: 0.00
+  Recall@3: 1.00
+  Recall@5: 1.00
+  Recall@8: 1.00
+  Recall@10: 1.00
+CORRECT: Ground truth found in predictions
+
+[7/10] Processing query...
+Query: ICICI Bank Assistant Admin, Experience required 0-2 years, test should be 30-40 mins long...
+Ground Truth: https://www.shl.com/solutions/products/product-catalog/view/basic-computer-literacy-windows-10-new/
+Predictions: 7 assessments returned
+  Recall@1: 1.00
+  Recall@3: 1.00
+  Recall@5: 1.00
+  Recall@8: 1.00
+  Recall@10: 1.00
+CORRECT: Ground truth found in predictions
+
+[8/10] Processing query...
+Query: We're looking for a Marketing Manager who can drive Recro’s brand positioning, community growth, and...
+Ground Truth: https://www.shl.com/solutions/products/product-catalog/view/writex-email-writing-sales-new/
+Predictions: 7 assessments returned
+  Recall@1: 0.00
+  Recall@3: 0.00
+  Recall@5: 0.00
+  Recall@8: 0.00
+  Recall@10: 0.00
+INCORRECT: Ground truth not in top 5
+
+[9/10] Processing query...
+Query: Based on the JD below recommend me assessment for the Consultant position in my organizations. The a...
+Ground Truth: https://www.shl.com/solutions/products/product-catalog/view/professional-7-1-solution/
+Predictions: 7 assessments returned
+  Recall@1: 0.00
+  Recall@3: 0.00
+  Recall@5: 0.00
+  Recall@8: 0.00
+  Recall@10: 0.00
+INCORRECT: Ground truth not in top 5
+
+[10/10] Processing query...
+Query: I want to hire a Senior Data Analyst with 5 years of experience and expertise in SQL, Excel and Pyth...
+Ground Truth: https://www.shl.com/solutions/products/product-catalog/view/data-warehousing-concepts/
+Predictions: 5 assessments returned
+  Recall@1: 1.00
+  Recall@3: 1.00
+  Recall@5: 1.00
+  Recall@8: 1.00
+  Recall@10: 1.00
+CORRECT: Ground truth found in predictions
+
+================================================================================
+TRAINING SET EVALUATION RESULTS
+================================================================================
+Mean Recall@1: 0.6000
+Mean Recall@3: 0.7000
+Mean Recall@5: 0.7000
+Mean Recall@8: 0.7000
+Mean Recall@10: 0.7000
+
+Incorrect Predictions: 3/10

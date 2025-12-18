@@ -2,6 +2,24 @@
 
 An intelligent AI-powered system for recommending SHL assessments based on job descriptions and natural language queries using LangGraph, OpenAI, and RAG architecture.
 
+
+
+## Evaluation
+
+#### Evaluation Files:
+- evaluation_results\evaluation_20251218_210701.txt
+- evaluation_results\train_evaluation_20251218_210701.json
+
+
+| Metric | Score | Interpretation |
+|--------|-------|----------------|
+| **Recall@1** | 60% | 6/10 queries: correct assessment is #1 ranked |
+| **Recall@3** | 70% | 7/10 queries: correct assessment in top 3 |
+| **Recall@5** | 70% | 7/10 queries: correct assessment in top 5 |
+| **Recall@8** | 70% | 7/10 queries: correct assessment in top 8 |
+| **Recall@10** | 70% | 7/10 queries: correct assessment in top 10 |
+
+
 ## Deployment
 
 ### FastAPI Backend
@@ -384,6 +402,7 @@ Assessment_Recommendation/
 │       ├── validators.py            # Input validation
 │       ├── formatters.py            # Output formatting
 │       └── helpers.py               # General helpers
+|       └── assessment_map.py 
 │
 ├── chainlit_app/                     # Chainlit frontend
 │   ├── __init__.py

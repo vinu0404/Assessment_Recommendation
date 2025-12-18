@@ -3,17 +3,19 @@ SHL Assessment Recommendation System - Evaluation Script
 
 This script evaluates the recommendation system using:
 1. Recall@K metric on labeled training data
-2. Generates predictions for test set
-3. Saves incorrect predictions for prompt fine-tuning
+2. Saves evaluation.txt with console output
+3. Saves train_evaluation.json with detailed results
 """
 
 import json
 import requests
 import time
+import re
 from typing import List, Dict, Any, Tuple
 from pathlib import Path
 from datetime import datetime
-import csv
+import sys
+import io
 
 API_BASE_URL = "http://localhost:8000"
 RECOMMEND_ENDPOINT = f"{API_BASE_URL}/recommend"
@@ -24,13 +26,50 @@ K_VALUES = [1, 3, 5, 8, 10]
 REQUEST_DELAY = 1.0  
 
 
+def normalize_shl_url(url: str) -> str:
+    """
+    
+    Args:
+        url: Original URL
+        
+    Returns:
+        Normalized URL string
+    """
+    if not url:
+        return ""
+    url = url.rstrip('/').lower()
+    url = re.sub(r'^https?://(www\.)?', '', url)
+    url = re.sub(r'/solutions/products/', '/products/', url)
+    url = re.sub(r'/solutions/', '/products/', url)
+    
+    return url
+
+
+class TeeOutput:
+    """Capture stdout to both console and string buffer"""
+    def __init__(self):
+        self.terminal = sys.stdout
+        self.log = io.StringIO()
+    
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)
+    
+    def flush(self):
+        self.terminal.flush()
+        self.log.flush()
+    
+    def getvalue(self):
+        return self.log.getvalue()
+
+
 class EvaluationMetrics:
     """Calculate evaluation metrics"""
     
     @staticmethod
     def recall_at_k(predicted_urls: List[str], ground_truth_url: str, k: int) -> float:
         """
-        Calculate Recall@K
+        Calculate Recall@K with URL normalization
         
         Args:
             predicted_urls: List of predicted assessment URLs
@@ -42,9 +81,9 @@ class EvaluationMetrics:
         """
         if not predicted_urls or not ground_truth_url:
             return 0.0
+        predicted_normalized = [normalize_shl_url(url) for url in predicted_urls[:k]]
+        ground_truth_normalized = normalize_shl_url(ground_truth_url)
         
-        predicted_normalized = [url.rstrip('/').lower() for url in predicted_urls[:k]]
-        ground_truth_normalized = ground_truth_url.rstrip('/').lower()
         return 1.0 if ground_truth_normalized in predicted_normalized else 0.0
     
     @staticmethod
@@ -63,16 +102,16 @@ class RecommendationEvaluator:
         self.results_dir.mkdir(exist_ok=True)
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.train_results = []
-        self.test_predictions = []
-        self.incorrect_predictions = []
+        self.tee = TeeOutput()
+        sys.stdout = self.tee
         
         print(f"Evaluation initialized - Results saved to: {self.results_dir}")
     
-    def load_data(self) -> Tuple[Dict[str, str], Dict[str, str]]:
-        """Load train and test data"""
+    def load_data(self) -> Dict[str, str]:
+        """Load train data"""
         with open(TRAIN_DATA_PATH, 'r', encoding='utf-8') as f:
             train_data = json.load(f)
-        print(f" Loaded {len(train_data)} training queries")
+        print(f"Loaded {len(train_data)} training queries")
         
         return train_data
     
@@ -97,11 +136,11 @@ class RecommendationEvaluator:
             if response.status_code == 200:
                 return response.json()
             else:
-                print(f"API returned status {response.status_code}: {response.text}")
+                print(f"WARNING: API returned status {response.status_code}: {response.text}")
                 return {"recommended_assessments": []}
         
         except requests.exceptions.RequestException as e:
-            print(f" API call failed: {e}")
+            print(f"ERROR: API call failed: {e}")
             return {"recommended_assessments": []}
     
     def evaluate_train_set(self, train_data: Dict[str, str]) -> Dict[str, Any]:
@@ -131,6 +170,7 @@ class RecommendationEvaluator:
             predicted_urls = [a['url'] for a in predicted_assessments]
             
             print(f"Predictions: {len(predicted_urls)} assessments returned")
+            
             recalls_for_query = {}
             for k in K_VALUES:
                 recall = EvaluationMetrics.recall_at_k(predicted_urls, ground_truth_url, k)
@@ -141,20 +181,14 @@ class RecommendationEvaluator:
             result = {
                 "query": query,
                 "ground_truth_url": ground_truth_url,
-                "predicted_urls": predicted_urls[:10],  
-                "predicted_assessments": predicted_assessments[:10],
+                "predicted_urls": predicted_urls[:10],
                 **recalls_for_query
             }
             self.train_results.append(result)
-            if recalls_for_query["recall@5"] == 0.0:  
-                self.incorrect_predictions.append({
-                    "query": query,
-                    "ground_truth_url": ground_truth_url,
-                    "ground_truth_name": self._extract_name_from_url(ground_truth_url),
-                    "predicted_assessments": predicted_assessments[:5],
-                    "reason": "Ground truth not in top 5 predictions"
-                })
-                print(" INCORRECT: Ground truth not in top 5")
+            if recalls_for_query["recall@5"] == 0.0:
+                print("INCORRECT: Ground truth not in top 5")
+            else:
+                print("CORRECT: Ground truth found in predictions")
         
         mean_recalls = {}
         for k in K_VALUES:
@@ -166,16 +200,16 @@ class RecommendationEvaluator:
         print("=" * 80)
         for k in K_VALUES:
             print(f"Mean Recall@{k}: {mean_recalls[f'mean_recall@{k}']:.4f}")
-        print(f"\nIncorrect Predictions: {len(self.incorrect_predictions)}/{len(train_data)}")
+        
+        incorrect_count = sum(1 for r in self.train_results if r["recall@5"] == 0.0)
+        print(f"\nIncorrect Predictions: {incorrect_count}/{len(train_data)}")
         print("=" * 80)
         
         return mean_recalls
     
-    
     def save_results(self, metrics: Dict[str, Any]):
-        """Save all evaluation results to files"""
+        """Save evaluation results to files"""
         print("\nSaving results...")
-        
         train_results_file = self.results_dir / f"train_evaluation_{self.timestamp}.json"
         with open(train_results_file, 'w', encoding='utf-8') as f:
             json.dump({
@@ -185,61 +219,23 @@ class RecommendationEvaluator:
                 "results": self.train_results
             }, f, indent=2, ensure_ascii=False)
         print(f"Training results: {train_results_file}")
+        evaluation_txt_file = self.results_dir / f"evaluation_{self.timestamp}.txt"
+        with open(evaluation_txt_file, 'w', encoding='utf-8') as f:
+            f.write(self.tee.getvalue())
+        print(f"Evaluation log: {evaluation_txt_file}")
         
-        incorrect_file = self.results_dir / f"incorrect_predictions_{self.timestamp}.json"
-        with open(incorrect_file, 'w', encoding='utf-8') as f:
-            json.dump({
-                "timestamp": self.timestamp,
-                "total_incorrect": len(self.incorrect_predictions),
-                "incorrect_predictions": self.incorrect_predictions
-            }, f, indent=2, ensure_ascii=False)
-        print(f"   ✓ Incorrect predictions: {incorrect_file}")
-
-
-        summary_file = self.results_dir / f"summary_{self.timestamp}.txt"
-        with open(summary_file, 'w', encoding='utf-8') as f:
-            f.write("SHL ASSESSMENT RECOMMENDATION SYSTEM - EVALUATION SUMMARY\n")
-            f.write("=" * 80 + "\n\n")
-            f.write(f"Evaluation Timestamp: {self.timestamp}\n")
-            f.write(f"API Endpoint: {RECOMMEND_ENDPOINT}\n\n")
-            
-            f.write("TRAINING SET METRICS:\n")
-            f.write("-" * 40 + "\n")
-            f.write(f"Total Queries: {len(self.train_results)}\n")
-            for metric, value in metrics.items():
-                f.write(f"{metric}: {value:.4f}\n")
-            f.write(f"\nIncorrect Predictions: {len(self.incorrect_predictions)}\n")
-            f.write(f"Accuracy@5: {1 - (len(self.incorrect_predictions) / len(self.train_results)):.4f}\n\n")
-            
-        
-        print(f"   ✓ Summary report: {summary_file}")
-        print("\n✅ All results saved successfully!")
-    
-    @staticmethod
-    def _extract_name_from_url(url: str) -> str:
-        """Extract assessment name from URL"""
-        parts = url.rstrip('/').split('/')
-        if parts:
-            name = parts[-1].replace('-', ' ').title()
-            return name
-        return "Unknown"
+        print("\nAll results saved successfully!")
     
     def run_evaluation(self):
         """Main evaluation workflow"""
-        print("\n" + "=" * 80)
-        print("SHL ASSESSMENT RECOMMENDATION SYSTEM - EVALUATION")
-        print("=" * 80)
-        
-        train_data, test_data = self.load_data()
+        train_data = self.load_data()
         metrics = self.evaluate_train_set(train_data)
         self.save_results(metrics)
-        
-        print("EVALUATION COMPLETE!")
         print(f"\nResults saved in: {self.results_dir}")
+        sys.stdout = self.tee.terminal
 
 
 def main():
-    """Entry point"""
     evaluator = RecommendationEvaluator()
     evaluator.run_evaluation()
 

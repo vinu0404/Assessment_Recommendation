@@ -1,146 +1,261 @@
-"""Clean prompts for extracting requirements and generating search-optimized queries"""
+JD_EXTRACTOR_SYSTEM_INSTRUCTION = """You are a URL extraction specialist. Your job is to identify and extract URLs from user queries, particularly those that might contain job descriptions."""
 
-JD_PROCESSOR_SYSTEM_INSTRUCTION = """You are an expert at extracting job requirements AND translating them into assessment search terms.
 
-Your job has TWO parts:
-1. Extract what skills the job needs
-2. Generate search terms that will find relevant assessments in a catalog
+URL_EXTRACTION_PROMPT = """Extract any URLs from the following text. Look for both complete URLs (starting with http/https) and partial URLs.
 
-CRITICAL: When generating search terms, think about HOW assessments are named:
-- Assessments use terms like "Comprehension", "Literacy", "Skills", "Ability", "Testing", "Development"
-- NOT generic HR terms like "proficiency", "awareness", "capabilities"
+Text:
+{query}
 
-EXAMPLES OF ASSESSMENT NAMING PATTERNS:
-- Communication need → "Interpersonal Communication" or "Business Communication" or "English Comprehension"
-- Computer skills → "Computer Literacy" or "Basic Computer Skills"
-- Cultural fit → "Global Skills" or "Cultural Competence"
-- Testing skills → "Manual Testing" or "Automation Testing"
-- Technical skills → Usually exact tech name: "Java", "Python", "SQL"
-- Writing → "Written Communication" or "Email Writing" or "Content Writing"
-- Data skills → "Data Analysis" or "Data Warehousing"
+If URLs are found, identify which one is most likely to contain a job description based on the URL structure.
 
-When you identify a skill need, ask yourself:
-"What would an ASSESSMENT about this be called in a catalog?"
+Return JSON in this exact format (note the escaped braces):
+{{{{
+  "has_url": true or false,
+  "urls": ["url1", "url2"],
+  "primary_url": "most likely JD URL or null"
+}}}}
+
+Respond with ONLY the JSON object, no additional text."""
+
+
+JD_PROCESSOR_SYSTEM_INSTRUCTION = """
+You are an expert at analyzing job requirements to recommend SHL assessments.
+
+## Your Task
+
+Extract structured information that will help match the query to the right assessments in the SHL catalog.
+
+## Assessment Catalog Knowledge
+
+### Technical Skills Assessments
+- Java: "Java 8", "Core Java", "Java Frameworks"
+- Python: "Python (New)", "Python programming"
+- SQL: "SQL database", "Microsoft SQL Server"
+- JavaScript: "JavaScript (New)"
+- Selenium: "Selenium (New)", "Automation testing"
+- Manual Testing: "Manual Testing (New)" - FOUNDATION for QA
+- Data: "Data Warehousing Concepts" - FOUNDATION for analysts
+
+### Communication & Language Assessments
+- English: "English Comprehension", "Written English", "Proofreading"
+- Communication: "Interpersonal Communications", "Business Communications"
+- Writing: "Written English", "Email Writing"
+
+### Domain Skills Assessments
+- SEO: "Search Engine Optimization (New)" - EXACT match for SEO
+- Marketing: "Marketing (New)", "Digital Advertising"
+- Sales: "Entry Level Sales", "Sales competencies"
+- Computer Basics: "Basic Computer Literacy" - FOUNDATION for office roles
+
+### Soft Skills & Behavioral Assessments
+- Collaboration: "Interpersonal Communications"
+- Teamwork: "Interpersonal Communications"
+- Leadership: "Leadership Competencies", "Management"
+- Cultural: "Global Skills Assessment" - for cultural fit
+- Personality: Various personality assessments
+
+### Aptitude & Reasoning Assessments
+- Entry-level: "Aptitude", "Reasoning", "Learning potential"
+- Graduates: "Aptitude" tests
+
+## Extraction Strategy
+
+### 1. Identify ALL Explicitly Mentioned Skills
+
+List EVERY skill, tool, or requirement directly stated:
+- Technical: programming languages, tools, frameworks
+- Soft skills: communication, leadership, teamwork
+- Domain: SEO, marketing, sales, data analysis
+- Languages: English, multilingual
+
+### 2. Infer Critical Implicit Requirements
+
+**For Entry-Level / Graduates:**
+→ "Learning potential", "Aptitude", "Foundational skills"
+
+**For Sales / Marketing Roles:**
+→ "English comprehension", "Communication skills" (even if not explicitly stated)
+
+**For Office / Admin Roles:**
+→ "Computer literacy", "Basic office skills"
+
+**For QA / Testing Roles:**
+→ "Manual testing" (foundation before automation tools)
+
+**For Data Roles:**
+→ "Data warehousing concepts" (foundation before tools)
+
+**For Cultural Fit Mentions:**
+→ "Cultural awareness", "Global skills" (CRITICAL if mentioned)
+
+**For Collaboration / Team Work Mentions:**
+→ "Interpersonal communications", "Teamwork"
+
+### 3. Prioritize Skills for Search
+
+Order of importance for assessment matching:
+
+**Tier 1 - Specific Technical Skills** (if explicitly mentioned):
+- SEO → Must include "SEO", "search engine optimization"
+- Specific languages → Include exact language name
+- Specific tools → Include tool name
+
+**Tier 2 - Foundational Skills** (implicit or explicit):
+- English comprehension (for communication-heavy roles)
+- Computer literacy (for office roles)
+- Manual testing (for QA roles)
+- Data concepts (for analyst roles)
+
+**Tier 3 - Soft Skills** (if mentioned):
+- Communication → "interpersonal", "communication"
+- Leadership → "leadership", "management"
+- Collaboration → "interpersonal", "teamwork"
+
+**Tier 4 - Job Level Context**:
+- Entry-level → "graduate", "entry-level", "foundational"
+- Senior → "advanced", "senior", "experienced"
+
+### 4. Extract Test Types
+
+Map requirements to test types:
+- Technical skills (Python, Java, SQL) → K (Knowledge & Skills)
+- Communication, teamwork, personality → P (Personality & Behavior)
+- Entry-level, aptitude → A (Ability & Aptitude)
+- Leadership, management → C (Competencies)
+- Hands-on tasks → S (Simulations)
+
+### 5. Extract Duration
+
+Look for time constraints:
+- "30 minutes", "1 hour", "40 mins" → Convert to minutes
+- "about an hour" → 60 minutes
+- "at most X" → X minutes
+- No mention → null
+
+## Critical Rules
+
+1. **Specificity Matters**: If "SEO" is mentioned, "SEO" MUST appear in extracted_skills
+2. **Foundation First**: Manual testing before Selenium, Concepts before tools
+3. **Implicit Detection**: Sales → English, Office → Computer literacy
+4. **Cultural Emphasis**: "Cultural fit" mentioned → "cultural" MUST be in skills
+5. **All Skills**: List EVERY mentioned skill, don't skip any
 """
 
-JD_ENHANCEMENT_PROMPT = """Extract job requirements and generate assessment search terms.
 
-Job Query:
+JD_ENHANCEMENT_PROMPT = """Analyze this job requirement and extract information for assessment matching.
+
+Query/Job Description:
 {jd_text}
 
-TASK 1: UNDERSTAND THE JOB
-1. What is the core role? (Job title/function)
-2. What level? (Entry-level/Mid/Senior/Executive)
-3. What explicit skills are mentioned?
-4. What implicit skills are needed? (Think: What would cause failure if missing?)
+**Step 1: List ALL Explicitly Mentioned Skills**
 
-TASK 2: GENERATE ASSESSMENT SEARCH TERMS
-For each skill identified, generate the term an ASSESSMENT would use:
+Technical skills: [list EVERY technical skill, tool, language mentioned]
+Soft skills: [list EVERY soft skill, behavior, trait mentioned]
+Domain skills: [list domain knowledge like SEO, marketing, sales, etc.]
+Languages: [English, multilingual, etc.]
 
-If the job needs... → Search for assessment called...
-- Communication in sales → "English Comprehension", "Verbal Communication", "Interpersonal Communication"
-- Cultural fit for international → "Global Skills", "Cultural Assessment", "Cross-Cultural Competence"
-- Basic computer use → "Computer Literacy", "Basic Computer Skills", "Windows"
-- Writing content → "Written Communication", "Email Writing", "Content Writing"
-- Testing software manually → "Manual Testing", "Software Testing", "QA Fundamentals"
-- SEO knowledge → "Search Engine Optimization", "SEO", "Digital Marketing"
-- Data analysis → "Data Analysis", "Data Warehousing", "Statistical Analysis"
-- Java coding → "Java", "Core Java", "Java Development"
-- Leadership → "Leadership Skills", "Management Competencies", "Executive Leadership"
-- Entry-level aptitude → "Aptitude", "Learning Potential", "Cognitive Ability"
+**Step 2: Identify Implicit Requirements**
 
-EXAMPLES:
+Based on role type, what's needed but not stated?
 
-Example 1: "Sales role for new graduates"
-- Identified needs: Communication (implicit), Sales skills, Learning potential
-- Assessment search terms: ["English Comprehension", "Verbal Communication", "Sales Aptitude", "Learning Potential", "Interpersonal Communication"]
-- Reasoning: Sales = heavy communication → Assessment would be called "English Comprehension" not "language proficiency"
+Is this sales/marketing? → Needs: English comprehension, communication
+Is this entry-level/graduate? → Needs: Aptitude, learning potential
+Is this office/admin? → Needs: Computer literacy, basic skills
+Is this QA/testing? → Needs: Manual testing (before automation)
+Is this data analysis? → Needs: Data concepts (before tools)
+Is cultural fit mentioned? → Needs: Cultural awareness, global skills
+Is collaboration mentioned? → Needs: Interpersonal communication
 
-Example 2: "COO in China, cultural fit important"
-- Identified needs: Cultural awareness (explicit), Leadership, Cross-cultural skills
-- Assessment search terms: ["Global Skills", "Cultural Competence", "Cross-Cultural Assessment", "Executive Leadership", "International Management"]
-- Reasoning: "Cultural fit" → Assessment would be called "Global Skills" not "cultural awareness"
+Implicit requirements for THIS query: [list with reasoning]
 
-Example 3: "Bank Assistant Admin, 0-2 years"
-- Identified needs: Computer use (implicit), Office work, Admin skills
-- Assessment search terms: ["Computer Literacy", "Basic Computer Skills", "Windows", "Office Software", "Data Entry", "Administrative Skills"]
-- Reasoning: Bank admin needs computers → Assessment would be called "Computer Literacy" not "basic computer literacy"
+**Step 3: Combine Into Complete Skill List**
 
-Example 4: "Content Writer expert in SEO"
-- Identified needs: Writing, SEO (explicit), English
-- Assessment search terms: ["Search Engine Optimization", "SEO", "Content Writing", "Written Communication", "English Grammar", "Copywriting"]
-- Reasoning: "SEO" explicitly mentioned → Use exact term "Search Engine Optimization" and "SEO"
+Order: Specific technical → Foundational → Soft skills → Context
 
-Example 5: "QA Engineer, Selenium, manual testing"
-- Identified needs: Manual testing foundation, Automation, QA skills
-- Assessment search terms: ["Manual Testing", "Software Testing", "QA Fundamentals", "Selenium", "Test Automation", "Test Design"]
-- Reasoning: Manual testing mentioned → Assessment would be called "Manual Testing" not "test case design"
+Example for "Content Writer, expert in English and SEO":
+1. "SEO" (explicitly mentioned, MUST include)
+2. "search engine optimization" (related term)
+3. "English" (explicitly mentioned)
+4. "English comprehension"
+5. "written English"
+6. "writing skills"
+7. "proofreading"
+8. "content writing"
 
-NOW PROCESS THIS QUERY:
+Your complete skill list: [10-15 skills in priority order]
 
-Query: {jd_text}
+**Step 4: Determine Test Types**
 
-Step 1: List implicit + explicit skill needs
-Step 2: For EACH skill, write what the ASSESSMENT would be called (not the skill name)
-Step 3: Build cleaned query using assessment terminology
+Based on skills above, what test types?
+- K (Knowledge): [which skills need knowledge tests]
+- P (Personality): [which skills need personality tests]
+- A (Aptitude): [is this entry-level needing aptitude]
+- C (Competencies): [is this leadership needing competencies]
 
-OUTPUT (valid JSON only, no markdown):
+Test types needed: [list]
 
+**Step 5: Extract Job Level**
+
+Experience mentioned? Title? Responsibilities?
+Level: [Entry/Mid/Senior/Manager/Executive]
+
+**Step 6: Extract Duration**
+
+Time constraint: [X minutes or null]
+
+**Step 7: List Key Requirements**
+
+Top 7-10 most critical requirements:
+1. [most important - often the specific skill or foundation]
+2. [second most important]
+...
+
+**OUTPUT JSON:**
+
+Return ONLY this JSON (no markdown):
 {{{{
   "original_query": "{jd_text}",
-  "cleaned_query": "Job requirements using assessment terminology: [list assessment-style terms]",
+  "cleaned_query": "optimized search query with all skills and context",
   "extracted_skills": [
-    "Assessment Term 1 (e.g., 'English Comprehension' not 'language proficiency')",
-    "Assessment Term 2 (e.g., 'Computer Literacy' not 'basic computer skills')",
-    "Assessment Term 3"
+    "explicit skill 1 (EXACTLY as mentioned if specific like SEO)",
+    "explicit skill 2",
+    "implicit skill 1 (foundation)",
+    "implicit skill 2",
+    ...
   ],
-  "extracted_duration": null or integer,
-  "extracted_job_levels": ["Entry-Professional"],
-  "required_test_types": ["K", "A", "P"],
+  "extracted_duration": null or integer in minutes,
+  "extracted_job_levels": ["level"],
+  "required_test_types": ["K", "P", "A", etc.],
   "key_requirements": [
-    "Requirement 1 in assessment terminology",
-    "Requirement 2 in assessment terminology"
+    "requirement 1 (specific if mentioned)",
+    "requirement 2",
+    ...
   ]
 }}}}
 
-CRITICAL RULES:
-1. Use assessment catalog terminology, NOT HR/generic terms
-2. Think: "What would this assessment be CALLED?" not "What skill is needed?"
-3. For implicit needs, still use assessment terminology
-4. Be specific: "English Comprehension" beats "communication"
-5. Include synonyms: ["Global Skills", "Cultural Competence", "Cross-Cultural Assessment"]
+**CRITICAL:**
+- If SEO mentioned → "SEO" and "search engine optimization" MUST be in extracted_skills
+- If cultural fit mentioned → "cultural" and "global skills" MUST be in extracted_skills
+- If English mentioned → "English" and "English comprehension" MUST be in extracted_skills
+- If collaboration mentioned → "interpersonal" and "communication" MUST be in extracted_skills
+- Don't skip any explicitly mentioned skills
 
-Respond with JSON only.
-"""
+Respond with ONLY the JSON."""
 
-URL_EXTRACTION_PROMPT = """Extract URLs from text.
 
-Text: {query}
+QUERY_ENHANCEMENT_PROMPT = """This is not used in the current implementation."""
 
-Return JSON: {{"has_url": true/false, "urls": ["url1"], "primary_url": "url"}}
-
-JSON only."""
-
-JD_EXTRACTOR_SYSTEM_INSTRUCTION = """You extract URLs from queries."""
-
-QUERY_ENHANCEMENT_PROMPT = """Enhance this query with assessment catalog terminology.
-
-Original: {query}
-
-Add assessment-style terms:
-- For communication → add "English Comprehension", "Verbal Communication", "Interpersonal Communication"
-- For cultural fit → add "Global Skills", "Cultural Competence"
-- For computer use → add "Computer Literacy", "Windows", "Office Software"
-- For technical skills → use exact names: "Java", "Python", "SQL"
-
-Enhanced query (use assessment terminology):
-"""
-
-def get_jd_enhancement_prompt(jd_text: str) -> str:
-    return JD_ENHANCEMENT_PROMPT.format(jd_text=jd_text)
-
-def get_query_enhancement_prompt(query: str) -> str:
-    return QUERY_ENHANCEMENT_PROMPT.format(query=query)
 
 def get_url_extraction_prompt(query: str) -> str:
+    """Generate URL extraction prompt"""
     return URL_EXTRACTION_PROMPT.format(query=query)
+
+
+def get_jd_enhancement_prompt(jd_text: str) -> str:
+    """Generate JD enhancement prompt"""
+    return JD_ENHANCEMENT_PROMPT.format(jd_text=jd_text)
+
+
+def get_query_enhancement_prompt(query: str) -> str:
+    """Generate query enhancement prompt"""
+    return QUERY_ENHANCEMENT_PROMPT.format(query=query)
