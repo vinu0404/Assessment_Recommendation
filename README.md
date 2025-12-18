@@ -1,61 +1,40 @@
 # SHL Assessment Recommendation System
 
-An intelligent AI-powered system for recommending SHL assessments based on job descriptions and natural language queries using LangGraph, O, and RAG architecture.
+An intelligent AI-powered system for recommending SHL assessments based on job descriptions and natural language queries using LangGraph, OpenAI, and RAG architecture.
 
 ## Deployment
 
 ### FastAPI Backend
 The FastAPI backend is deployed and accessible at:
-[https://shl-fastapi-y933.onrender.com/docs](https://shl-fastapi-y933.onrender.com/docs)
+[https://api-shl-79dr.onrender.com/docs](https://api-shl-79dr.onrender.com/docs)
 
 
 ## API Endpoints
 
 | Feature | Endpoint | Method | Description |
 |---------|----------|--------|-------------|
-| **Health Check** | `/api/health` | GET | Checks if the API is running and healthy. |
-| **Recommendations** | `/api/recommend` | POST | Generates SHL assessment recommendations based on input. |
-| **Chat** | `/api/chat` | POST | Chat-based interaction with the model. |
-| **Session Management** | `/api/session/{session_id}` | GET | Retrieve a specific session and its data. |
-| **Session Management** | `/api/session/{session_id}` | DELETE | Delete a specific session and clear its history. |
-| **Session Management** | `/api/session/{session_id}/stats` | GET | Get statistics and metrics for a specific session. |
-| **Assessment Search** | `/api/assessments/search` | GET | Search assessments by keyword or filters. |
-| **Assessment Details** | `/api/assessments/{assessment_id}` | GET | Get detailed information about a specific assessment. |
-| **Assessment Overview** | `/api/assessments/stats/overview` | GET | Get overview statistics of all available assessments. |
-| **Test Types** | `/api/test-types` | GET | Retrieve the full list of SHL test types. |
-| **Job Description Extraction** | `/api/extract-jd` | POST | Extract structured details from job descriptions. |
-| **Refresh Data** | `/api/refresh` | POST | Refreshes vector embeddings and cached data. |
-| **Refresh Status** | `/api/refresh/status` | GET | Check the status of the data refresh operation. |
+| **Health Check** | `/health` | GET | Checks if the API is running and healthy. |
+| **Recommendations** | `/recommend` | POST | Generates SHL assessment recommendations based on input. |
 | **Root** | `/` | GET | Root endpoint providing API information. |
-| **API Info** | `/api` | GET | Get API metadata and version information. |
+
 ---
 
 ### Chainlit Frontend 
 The Chainlit frontend interface is deployed at:
-[https://shl-chainlit.onrender.com/](https://shl-chainlit.onrender.com/)
+[https://assessment-recommendation-aupy.onrender.com](https://assessment-recommendation-aupy.onrender.com/)
 
 ## Frontend Screenshots:
 
 
-### Home Page
 ![Frontend Screenshot 1](images/1.png)
 
-### Query containing  JD link
 ![Frontend Screenshot 2](images/2.png)
 
-![Frontend Screenshot 2](images/3.png)
 
-### JD in Query
-![Frontend Screenshot 2](images/4.png)
-![Frontend Screenshot 2](images/5.png)
+## FASTAPI Endpoints
 
-### General Question
-![Frontend Screenshot 2](images/10.png)
+![api Screenshot](images/3.png)
 
-### FASTAPI Endpoints
-![Frontend Screenshot 2](images/8.png)
-
-![Frontend Screenshot 2](images/9.png)
 
 ---
 
@@ -93,7 +72,7 @@ graph TD
     subgraph RAGSubgraph[RAG Subgraph]
         direction TB
         EmbedStep[Embed Requirements] --> VectorSearchStep[ChromaDB Vector Search]
-        VectorSearchStep --> RetrieveStep[Retrieve Top 15]
+        VectorSearchStep --> RetrieveStep[Retrieve Top 20]
         RetrieveStep --> RerankDecision{RAG_ENABLE_LLM_RERANKING?}
         RerankDecision -->|True| LLMRerankStep[LLM Reranking]
         RerankDecision -->|False| ScoreRankStep[Score-Based Ranking]
@@ -149,7 +128,7 @@ The system uses 5 specialized AI agents orchestrated by LangGraph:
 - Query validation
 
 **Technology:** 
-- Gemini LLM with structured output
+- Open AI LLM with structured output
 - Pydantic schema validation
 - Pattern matching fallback
 
@@ -187,7 +166,7 @@ The system uses 5 specialized AI agents orchestrated by LangGraph:
 - Key requirement extraction
 
 **Technology:**
-- Gemini LLM for deep analysis
+- Open AI LLM for deep analysis
 - Rule-based extraction as fallback
 - Pydantic EnhancedQuery schema
 
@@ -207,19 +186,11 @@ The system uses 5 specialized AI agents orchestrated by LangGraph:
 
 **Technology:**
 - ChromaDB vector search
-- Gemini embeddings
+- Open AI embeddings
 - LLM reranking
-- Custom balance algorithm
 
 **Input:** Enhanced query with requirements
 **Output:** 5-10 ranked assessments
-
-**RAG Process (6 Steps):**
-1. Embed requirements using Gemini
-2. Vector search in ChromaDB (top 15-20)
-3. Retrieve candidate assessments
-4. LLM reranking for relevance
-5. Select final 5-10 recommendations
 
 ---
 
@@ -233,7 +204,7 @@ The system uses 5 specialized AI agents orchestrated by LangGraph:
 - Search knowledge base
 
 **Technology:**
-- Gemini LLM for generation
+- Open AI LLM for generation
 - ChromaDB for context retrieval
 - Pre-defined FAQ responses
 
@@ -245,15 +216,12 @@ The system uses 5 specialized AI agents orchestrated by LangGraph:
 ### Services
 
 #### **LLM Service** (`app/services/llm_service.py`)
-- Gemini API integration
+- Open AI API integration
 - Structured output generation
-- Intent classification
-- Reranking
 
 #### **Embedding Service** (`app/services/embedding_service.py`)
-- Generate embeddings using Gemini
+- Generate embeddings using Open AI
 - Batch processing
-- Query vs document embeddings
 - Similarity computation
 
 #### **Vector Store Service** (`app/services/vector_store_service.py`)
@@ -280,13 +248,13 @@ The system uses 5 specialized AI agents orchestrated by LangGraph:
 
 ### Core Endpoints
 
-#### `POST /api/recommend`
+#### `POST /recommend`
 **Purpose:** Get assessment recommendations for a job description
 
 **Request:**
 ```json
 {
-  "query": "I need assessments for Java developers who can collaborate with teams"
+  "query": "I need assessments for Python developers who can collaborate with teams"
 }
 ```
 
@@ -295,13 +263,15 @@ The system uses 5 specialized AI agents orchestrated by LangGraph:
 {
   "recommended_assessments": [
     {
-      "url": "https://www.shl.com/products/...",
-      "name": "Java Programming",
       "adaptive_support": "No",
-      "description": "Multi-choice test measuring Java knowledge...",
-      "duration": 30,
+      "description": "Multi-choice test that measures the knowledge of Python programming...",
+      "duration": 11,
+      "name": "Python Programming Test",
       "remote_support": "Yes",
-      "test_type": ["Knowledge & Skills"]
+      "test_type": [
+        "Knowledge & Skills"
+      ],
+      "url": "https://www.shl.com/products/product-catalog/view/python-new/"
     }
   ]
 }
@@ -315,34 +285,7 @@ The system uses 5 specialized AI agents orchestrated by LangGraph:
 
 ---
 
-#### `POST /api/chat`
-**Purpose:** General chat interface for queries and recommendations
-
-**Request:**
-```json
-{
-  "query": "What is the Python assessment?",
-  "session_id": "optional-session-id"
-}
-```
-
-**Response:**
-```json
-{
-  "response": "The Python assessment is a multi-choice test...",
-  "session_id": "abc-123",
-  "assessments": null
-}
-```
-
-**Features:**
-- Handles both JD queries and questions
-- Session management
-- Contextual responses
-
----
-
-#### `GET /api/health`
+#### `GET /health`
 **Purpose:** Health check endpoint
 
 **Response:**
@@ -359,186 +302,19 @@ The system uses 5 specialized AI agents orchestrated by LangGraph:
 
 ---
 
-### Search & Discovery
-
-#### `GET /api/assessments/search`
-**Purpose:** Direct search in assessment catalog
-
-**Parameters:**
-- `search_term` (required): Search keyword
-- `test_type` (optional): Filter by test type
-- `duration_max` (optional): Maximum duration in minutes
-- `remote_only` (optional): Only remote assessments
-- `limit` (optional): Number of results (1-50)
-
-**Example:**
-```
-GET /api/assessments/search?search_term=python&duration_max=30&limit=5
-```
-
----
-
-#### `GET /api/assessments/{assessment_id}`
-**Purpose:** Get specific assessment details
-
-**Example:**
-```
-GET /api/assessments/https://www.shl.com/products/product-catalog/view/automata-selenium/
-```
-
----
-
-#### `GET /api/test-types`
-**Purpose:** Get available test types
-
-**Response:**
-```json
-{
-  "test_types": [
-    {
-      "code": "K",
-      "name": "Knowledge & Skills",
-      "description": "Tests that assess technical knowledge..."
-    }
-  ]
-}
-```
-
----
-
-### Utility Endpoints
-
-#### `POST /api/extract-jd`
-**Purpose:** Extract job description from URL
-
-**Request:**
-```json
-{
-  "url": "https://example.com/job/12345"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "url": "https://example.com/job/12345",
-  "jd_text": "We are looking for...",
-  "text_length": 1250,
-  "metadata": {
-    "title": "Software Engineer - Java",
-    "page_heading": "Join Our Team"
-  }
-}
-```
-
----
-
-### Session Management
-
-#### `GET /api/session/{session_id}`
-**Purpose:** Get session history and interactions
-
-**Response:**
-```json
-{
-  "session_id": "abc-123",
-  "created_at": "2024-01-15T10:00:00",
-  "interaction_count": 5,
-  "interactions": [...]
-}
-```
-
----
-
-#### `DELETE /api/session/{session_id}`
-**Purpose:** Delete session and all data
-
-**Response:**
-```json
-{
-  "message": "Session abc-123 deleted successfully",
-  "session_id": "abc-123"
-}
-```
-
----
-
-#### `GET /api/session/{session_id}/stats`
-**Purpose:** Get session statistics
-
-**Response:**
-```json
-{
-  "session_id": "abc-123",
-  "created_at": "2024-01-15T10:00:00",
-  "total_interactions": 5,
-  "successful_interactions": 4,
-  "success_rate": 0.8
-}
-```
-
----
-
-### Admin Endpoints
-
-#### `POST /api/refresh` 
-**Purpose:** Refresh assessment catalog (requires API key)
-
-**Headers:**
-```
-X-API-Key: shl-refresh-key
-```
-
-**Parameters:**
-- `force` (optional): Force refresh even if recently updated
-
-**Response:**
-```json
-{
-  "status": "started",
-  "message": "Refresh started in background",
-  "assessments_count": 0,
-  "timestamp": "2024-01-15T10:00:00Z"
-}
-```
-
-**Features:**
-- Automatic refresh every 7 days
-- Scrapes latest assessments
-- Updates ChromaDB embeddings
-- Replaces old data
-
----
-
-#### `GET /api/refresh/status` 
-**Purpose:** Get refresh status
-
-**Response:**
-```json
-{
-  "refresh_in_progress": false,
-  "last_refresh_time": "2024-01-08T10:00:00Z",
-  "last_refresh_db": "2024-01-08T10:00:00Z",
-  "assessments_count": 215,
-  "next_auto_refresh": "2024-01-15T10:00:00Z",
-  "auto_refresh_enabled": true,
-  "refresh_interval_days": 7
-}
-```
-
----
-
 ## Project Structure
 
 ```
-shl/
+Assessment_Recommendation/
 │
 ├── .env                              # Environment configuration
+├── .chainlit                         # Chainlit configuration
+├── chainlit.md                       # Chainlit welcome page
 ├── requirements.txt                 
 ├── README.md                         
 ├── run.py                            # FastAPI runner
-├── predictions.csv                   # for test-set prediction using fastapi
+├── run_chainlit.py                   # Chainlit runner
+├── predictions.csv                   # for test-set prediction used /recommend
 │
 ├── app/                              # Main application 
 │   ├── __init__.py
@@ -563,12 +339,6 @@ shl/
 │   │       ├── __init__.py
 │   │       ├── health.py            # Health check
 │   │       ├── recommend.py         # Main recommendations
-│   │       ├── chat.py              # Chat interface
-│   │       ├── session.py           # Session management
-│   │       ├── assessments.py       # Assessment search
-│   │       ├── extract_jd.py        # JD extraction utility
-│   │       ├── test_types.py        # Test types info
-│   │       └── refresh.py           # Auto-refresh system
 │   │
 │   ├── database/                    
 │   │   ├── __init__.py
@@ -615,6 +385,19 @@ shl/
 │       ├── formatters.py            # Output formatting
 │       └── helpers.py               # General helpers
 │
+├── chainlit_app/                     # Chainlit frontend
+│   ├── __init__.py
+│   ├── app.py                        # Main Chainlit application
+│   │
+│   ├── components/                   # UI components
+│   │   ├── __init__.py
+│   │   ├── table_renderer.py        # Assessment display
+│   │   └── progress_tracker.py      # Progress indicators
+│   │
+│   ├── handlers/                     # Request handlers
+│   │   ├── __init__.py
+│   │   ├── message_handler.py       # Message processing
+│   │   └── session_handler.py       # Session management
 │
 ├── data/                            
 │   ├── shl_assessments.json         # Scraped  377 assessments data
@@ -630,7 +413,8 @@ shl/
 │
 ├── scripts/                          
 │   ├── __init__.py
-│   ├── scrape_catalog.py            #scraper    
+│   ├── scrape_catalog.py            #scraper  
+    ├── initailize_vector_store.py    
 │
 └── logs/                             # Application logs
     ├── app.log                       # Main application log
@@ -655,14 +439,14 @@ shl/
 ### Prerequisites
 
 - Python 3.11
-- Google Gemini API Key 
+- Open AI API Key 
 
 ### Installation
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/vinu0404/SHL.git
-cd shl
+git clone https://github.com/vinu0404/https://github.com/vinu0404/Assessment_Recommendation.git
+cd Assessment_Recommendation
 
 # 2. Create virtual environment
 python -m venv venv
@@ -676,9 +460,9 @@ venv\Scripts\activate
 # 4. Install dependencies
 pip install -r requirements.txt
 
-# 5. Create .env file and add your Gemini API key
+# 5. Create .env file and add your Open AI API key
 cp .env.example .env
-# Edit .env and add your GEMINI_API_KEY
+# Edit .env and add your Open AI_API_KEY
 ```
 
 
@@ -701,7 +485,7 @@ python run_chainlit.py
 
 ##  Usage Examples
 
-### Example 1: Job Description Query
+### Example 1: Job Description Query in Chainlit
 
 **Input:**
 ```
@@ -735,7 +519,7 @@ Here's the job posting: https://example.com/jobs/data-scientist
 3. JD Processor analyzes full job description
 4. RAG recommends relevant assessments
 
-### Example 3: General Question
+### Example 3: General Question in Chainlit only 
 
 **Input:**
 ```
@@ -758,20 +542,4 @@ Remote Support: Yes
 Adaptive: No
 ```
 
----
-## Auto-Refresh System
-
-The system automatically refreshes assessment data every 7 days:
-
-**Features:**
-- Scrapes latest assessments from SHL website
-- Generates new embeddings
-- Updates ChromaDB collection
-- Tracks last update time
-
-**Manual Trigger:**
-```bash
-curl -X POST http://localhost:8000/api/refresh \
-  -H "X-API-Key: shl-refresh-key"
-```
 

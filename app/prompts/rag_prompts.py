@@ -1,159 +1,134 @@
-"""Enhanced RAG prompts with comprehensive assessment coverage across all domains"""
+"""Clean RAG prompts for assessment matching"""
 
+RAG_SYSTEM_INSTRUCTION = """You are an expert at matching job requirements to SHL assessments.
 
-RAG_SYSTEM_INSTRUCTION = """
-You are an expert assessment recommender for SHL products. You understand how technical skills, soft skills, cognitive abilities, domain knowledge, job levels, and assessment types relate across roles and industries.
+Your job: Given job requirements and candidate assessments, rank which assessments best predict success.
 
-## Core Expertise
+CORE PRINCIPLES:
 
-### 1. Technical & Domain Understanding
-You understand technical ecosystems and domain relationships.  
-Examples:
-- Programming (e.g., Python, JavaScript, Java, SQL) → frameworks, tools, data handling, backend/frontend use
-- Cloud & DevOps → AWS, cloud infrastructure, CI/CD, automation
-- Data & Analytics → statistics, machine learning, BI, data processing
-- Business & Finance → accounting, finance, marketing, operations
-- Healthcare → clinical knowledge, patient care, compliance
-- Customer Service & Admin → communication, systems, accuracy, service delivery
+1. FOUNDATION BEFORE ADVANCED
+   - Test basic skills before specialized skills
+   - Example: Manual Testing before Selenium automation
+   - Example: Data concepts before specific tools
 
-You use ecosystem knowledge to infer related skill coverage when recommending assessments.
+2. IMPLICIT NEEDS ARE CRITICAL
+   - Sales roles need communication → English/Verbal tests
+   - Admin/Banking roles need computer basics → Computer Literacy
+   - Entry-level needs learning ability → Aptitude tests
+   - Cultural fit explicitly mentioned → Cultural/Global assessments
 
-### 2. Soft Skills & Behavioral Competencies
-You understand how roles translate to assessable behaviors:
-- Communication, teamwork, customer focus, adaptability
-- Leadership, people management, decision-making
-- Problem solving, critical thinking, learning agility
-- Work style traits such as reliability, organization, attention to detail
+3. EXACT MATCHES MATTER
+   - If "SEO" mentioned → SEO assessment ranks high
+   - If "Selenium" mentioned → Selenium assessment ranks high
+   - If assessment name matches requirement → strong signal
 
-You map these to appropriate behavioral, competency, or situational assessments.
+4. JOB LEVEL APPROPRIATENESS
+   - Entry-level → Aptitude, basics, foundational skills
+   - Mid-level → Specific technical + soft skills
+   - Senior/Executive → Leadership, judgment, strategic thinking
 
-### 3. Cognitive & Aptitude Needs
-You recognize when roles require:
-- Reasoning, numerical ability, analytical thinking
-- Learning potential or judgment
-- Strategic or decision-making capability
+5. DURATION IS HARD CONSTRAINT
+   - If duration > limit → score = 0 (disqualified)
 
-You include aptitude or reasoning assessments where appropriate.
-
-### 4. Assessment Type Knowledge
-You select assessments based on what needs to be measured:
-- Knowledge & Skills (K): technical or domain proficiency
-- Personality / Behavior (P): work style and soft skills
-- Ability / Aptitude (A): reasoning, problem-solving, learning
-- Competencies (C): leadership and managerial behaviors
-- Situational / Biodata (B): judgment and experience-based decisions
-- Simulations (S) / Exercises (E): hands-on or real-world performance
-- Development / 360 (D): feedback and growth-focused use
-
-### 5. Job Level Awareness
-You adapt assessment difficulty and focus by seniority:
-- Entry: foundational skills, aptitude, learning potential
-- Mid-level: independent technical skills, competencies
-- Manager: leadership, decision-making, people management
-- Senior / Executive: strategic thinking, organizational impact
-
-### 6. Recommendation Principles
-When retrieving, ranking, or selecting assessments, you:
-1. Prioritize relevance to actual job requirements
-2. Use vector similarity as an important signal
-3. Ensure coverage across technical, behavioral, cognitive, and domain needs
-4. Match assessments to job level
-5. Respect duration constraints strictly
-6. Avoid redundant testing
-7. Balance different assessment types for holistic evaluation
-
-Your goal is to recommend assessment batteries that are relevant, balanced, efficient, and aligned with SHL's assessment catalog.
+SCORING LOGIC:
+- Tests implicit foundation need: 0.8-1.0
+- Direct match to explicit skill: 0.7-0.9
+- Appropriate for job level: 0.6-0.8
+- Related/supporting skill: 0.4-0.6
+- Loosely related: 0.2-0.4
+- Unrelated: 0.0-0.2
 """
 
+RERANKING_PROMPT = """Rank assessments for this job requirement.
 
-RERANKING_PROMPT = """
-You are ranking assessment relevance for a job requirement using your knowledge of skills, behaviors, cognition, domain context, and assessment types.
-
-Job Requirement:
+JOB REQUIREMENT:
 {query}
 
-Required Skills:
+KEY SKILLS:
 {skills}
 
-Required Test Types:
+TEST TYPES:
 {test_types}
 
-Job Level:
+JOB LEVEL:
 {job_levels}
 
-Duration Constraint:
+DURATION LIMIT:
 {duration_constraint}
 
-Retrieved Assessments (with similarity scores):
+CANDIDATE ASSESSMENTS:
 {assessments}
 
-Task:
-Rank the retrieved assessments by overall relevance to the job requirement.
+---
 
-Evaluation Criteria (apply holistically):
+REASONING PROCESS:
 
-1. Skill & Domain Alignment
-- Match required technical skills and related ecosystem tools
-- Consider domain-specific knowledge and functional responsibilities
+1. What are the IMPLICIT foundation needs?
+   - Sales/Marketing → Communication, language
+   - Admin/Banking → Computer basics
+   - Entry-level → Aptitude, learning ability
+   - Cultural fit mentioned → Cultural/global skills
+   - Technical → Foundation concepts first
 
-2. Behavioral & Soft Skills
-- Communication, teamwork, leadership, problem solving, adaptability
-- Customer or people-facing competencies where relevant
+2. What are the EXPLICIT skill needs?
+   - Which specific skills/tools were mentioned?
+   - Which are most critical?
 
-3. Cognitive & Aptitude Fit
-- Analytical reasoning, numerical ability, learning agility, judgment
-- Strategic or decision-making skills if required by the role
+3. For EACH assessment:
+   - Does it test an implicit foundation need? (score 0.8-1.0)
+   - Does it directly match explicit skill? (score 0.7-0.9)
+   - Is it appropriate for the job level? (adjust score)
+   - Does it fit duration? (if not, score = 0.0)
 
-4. Test Type Appropriateness
-- Technical → Knowledge / Skills
-- Behavioral → Personality / Competency
-- Cognitive → Ability / Aptitude
-- Practical → Simulation / Exercises
-- Situational → SJT / Biodata
-- Development → 360 / Feedback
+4. Rank by score
 
-5. Job Level Match
-- Entry: foundational, learning potential
-- Mid: independent, proficient
-- Senior/Manager: leadership, decision-making
-- Executive: strategic, organizational impact
+---
 
-6. Duration & Coverage
-- Strictly respect time limits
-- Prefer assessments that maximize coverage without redundancy
+SCORING EXAMPLES:
 
-7. Vector Similarity Signal
-- Use similarity scores as an important signal
-- Do not discard high-score items without strong justification
+Example: Sales role for graduates + "English Comprehension" assessment
+- Implicit need: Communication foundation for sales
+- Assessment tests: English language skills
+- Level: Appropriate for entry-level
+- Score: 0.95 (tests critical implicit foundation)
 
-Scoring Guide:
-- 0.9–1.0: Excellent match (direct, comprehensive, level-appropriate)
-- 0.7–0.9: Strong match (minor gaps acceptable)
-- 0.5–0.7: Partial match (some relevance, limited coverage)
-- 0.3–0.5: Weak match
-- 0.0–0.3: Poor match
+Example: COO cultural fit + "Global Skills Assessment"  
+- Explicit need: "Cultural fit" mentioned in query
+- Assessment tests: Cultural awareness, global mindset
+- Level: Appropriate for executive
+- Score: 0.95 (direct match to explicit requirement)
 
-IMPORTANT: Your response must be ONLY a valid JSON array. No markdown, no code blocks, no explanations.
+Example: Bank admin + "Computer Literacy"
+- Implicit need: Must use banking systems/computers
+- Assessment tests: Basic computer skills
+- Level: Appropriate for entry-level
+- Score: 0.90 (tests critical implicit foundation)
 
-Return the top {top_k} assessments as a JSON array in this EXACT format (note the escaped braces):
+Example: Content + SEO + "SEO Assessment"
+- Explicit need: "SEO" mentioned
+- Assessment tests: SEO knowledge
+- Level: Appropriate for specialist
+- Score: 0.90 (direct explicit match)
+
+---
+
+OUTPUT (valid JSON array only, no markdown):
+
 [
-  {{{{"id": 0, "score": 0.95, "reason": "Brief explanation"}}}},
-  {{{{"id": 1, "score": 0.88, "reason": "Brief explanation"}}}},
-  {{{{"id": 2, "score": 0.82, "reason": "Brief explanation"}}}}
+  {{"id": 0, "score": 0.95, "reason": "Brief reason"}},
+  {{"id": 3, "score": 0.88, "reason": "Brief reason"}},
+  {{"id": 7, "score": 0.82, "reason": "Brief reason"}}
 ]
 
-Rules:
-- Use double quotes for all strings
-- Include comma after each object except the last
-- "id" must be the assessment index (integer from 0 to N-1)
-- "score" must be a number between 0.0 and 1.0
-- "reason" must be a concise string (1-2 sentences)
-- Sort by score descending (highest first)
-- Return ONLY the JSON array, nothing else
+RULES:
+- Return EXACTLY {top_k} assessments
+- Score 0.0-1.0
+- Sort by score descending
+- Duration violations = 0.0
+- Valid JSON only
 
-Begin your response with [ and end with ]
+Begin with [
 """
-
 
 def get_reranking_prompt(
     query: str,
@@ -165,16 +140,16 @@ def get_reranking_prompt(
     top_k: int
 ) -> str:
     """Generate reranking prompt"""
-    skills_str = ", ".join(skills[:30]) if skills else "Not specified"
+    skills_str = ", ".join(skills[:10]) if skills else "Not specified"
     test_types_str = ", ".join(test_types) if test_types else "Not specified"
     levels_str = ", ".join(job_levels) if job_levels else "Not specified"
     
     return RERANKING_PROMPT.format(
-        query=query,
+        query=query[:500],
         skills=skills_str,
         test_types=test_types_str,
         job_levels=levels_str,
-        duration_constraint=duration_constraint or "No constraint",
+        duration_constraint=duration_constraint or "No limit",
         assessments=assessments,
         top_k=top_k
     )

@@ -1,223 +1,146 @@
-"""Enhanced prompts for JD extraction with comprehensive skill/test type mapping"""
+"""Clean prompts for extracting requirements and generating search-optimized queries"""
 
+JD_PROCESSOR_SYSTEM_INSTRUCTION = """You are an expert at extracting job requirements AND translating them into assessment search terms.
 
-JD_EXTRACTOR_SYSTEM_INSTRUCTION = """You are a URL extraction specialist. Your job is to identify and extract URLs from user queries, particularly those that might contain job descriptions."""
+Your job has TWO parts:
+1. Extract what skills the job needs
+2. Generate search terms that will find relevant assessments in a catalog
 
+CRITICAL: When generating search terms, think about HOW assessments are named:
+- Assessments use terms like "Comprehension", "Literacy", "Skills", "Ability", "Testing", "Development"
+- NOT generic HR terms like "proficiency", "awareness", "capabilities"
 
-URL_EXTRACTION_PROMPT = """Extract any URLs from the following text. Look for both complete URLs (starting with http/https) and partial URLs.
+EXAMPLES OF ASSESSMENT NAMING PATTERNS:
+- Communication need → "Interpersonal Communication" or "Business Communication" or "English Comprehension"
+- Computer skills → "Computer Literacy" or "Basic Computer Skills"
+- Cultural fit → "Global Skills" or "Cultural Competence"
+- Testing skills → "Manual Testing" or "Automation Testing"
+- Technical skills → Usually exact tech name: "Java", "Python", "SQL"
+- Writing → "Written Communication" or "Email Writing" or "Content Writing"
+- Data skills → "Data Analysis" or "Data Warehousing"
 
-Text:
-{query}
-
-If URLs are found, identify which one is most likely to contain a job description based on the URL structure.
-
-Return JSON in this exact format (note the escaped braces):
-{{{{
-  "has_url": true or false,
-  "urls": ["url1", "url2"],
-  "primary_url": "most likely JD URL or null"
-}}}}
-
-Respond with ONLY the JSON object, no additional text."""
-
-JD_PROCESSOR_SYSTEM_INSTRUCTION = """
-You are an expert at analyzing job descriptions and extracting structured requirements for assessment recommendations.
-
-## Your Responsibilities
-
-From a given job description, accurately identify and structure:
-
-1. Technical skills and tools (including related ecosystems)
-2. Soft skills and behavioral competencies
-3. Cognitive and aptitude requirements
-4. Domain or industry-specific knowledge
-5. Appropriate assessment test types
-6. Job level / seniority indicators
-7. Key requirements for retrieval and ranking
-
-## Skill & Ecosystem Understanding
-
-You understand how skills map to broader ecosystems and contexts.
-Examples:
-- Programming & Tech: languages, frameworks, tools, databases, cloud, DevOps
-- Data & Analytics: statistics, analysis, ML, BI, data processing
-- Business & Functions: finance, accounting, marketing, sales, operations, HR
-- Healthcare & Services: clinical knowledge, patient care, compliance, service delivery
-- Admin & Support: office tools, computer literacy, accuracy, coordination
-
-When a skill is mentioned, infer commonly associated tools and contexts if relevant.
-
-## Soft Skills & Behavioral Mapping
-
-You recognize assessable competencies such as:
-- Communication, teamwork, collaboration
-- Leadership, people management, decision-making
-- Problem solving, analytical thinking, learning agility
-- Adaptability, time management, attention to detail
-- Customer focus, business awareness
-
-Map these to appropriate behavioral or competency-based assessments.
-
-## Cognitive & Aptitude Identification
-
-Identify when roles require:
-- Reasoning, numerical or verbal ability
-- Analytical thinking or problem-solving
-- Learning potential or judgment
-
-Recommend aptitude or reasoning assessments when applicable.
-
-## Test Type Mapping Rules
-
-Map requirements to assessment types:
-- Knowledge & Skills (K): technical or domain expertise
-- Personality / Behavior (P): work style, traits, soft skills
-- Ability / Aptitude (A): reasoning, learning, cognition
-- Competencies (C): leadership, management behaviors
-- Situational / Biodata (B): experience-based judgment
-- Simulations / Exercises (S/E): hands-on or applied performance
-
-## Job Level Classification
-
-Infer job level using experience and responsibility cues:
-- Entry: foundational skills, learning potential
-- Mid: independent execution, professional expertise
-- Senior/Manager: leadership, decision-making
-- Executive: strategic and organizational impact
-
-## Query Enhancement Guidance
-
-When preparing queries for retrieval:
-- Add clear synonyms and common variations
-- Expand abbreviations where useful
-- Include relevant ecosystem or domain context
-- Add assessment-related vocabulary (e.g., "skill assessment", "evaluation")
-- Keep expansions concise and high-signal
-
-Your goal is to extract clean, structured, assessment-relevant information that enables accurate retrieval, ranking, and final assessment selection.
+When you identify a skill need, ask yourself:
+"What would an ASSESSMENT about this be called in a catalog?"
 """
 
+JD_ENHANCEMENT_PROMPT = """Extract job requirements and generate assessment search terms.
 
-JD_ENHANCEMENT_PROMPT = """Analyze the following job description or query and extract structured information using the comprehensive skill and test type mapping provided in your system instructions.
-
-Query/Job Description:
+Job Query:
 {jd_text}
 
-Follow these steps:
+TASK 1: UNDERSTAND THE JOB
+1. What is the core role? (Job title/function)
+2. What level? (Entry-level/Mid/Senior/Executive)
+3. What explicit skills are mentioned?
+4. What implicit skills are needed? (Think: What would cause failure if missing?)
 
-**Step 1: Extract Technical Skills**
-- Identify all technical skills, programming languages, tools, frameworks
-- Use the Programming Languages & Technology Mapping from your instructions
-- Expand with related terms and ecosystem tools
-- Example: "Python" → include "Python programming", "scripting", "automation", "Django", "pandas"
+TASK 2: GENERATE ASSESSMENT SEARCH TERMS
+For each skill identified, generate the term an ASSESSMENT would use:
 
-**Step 2: Extract Soft Skills**
-- Identify all soft skills, behavioral traits, interpersonal competencies
-- Use the Soft Skills & Behavioral Competencies Mapping
-- Expand with related competencies
-- Example: "leadership" → include "team leadership", "people management", "mentoring", "coaching"
+If the job needs... → Search for assessment called...
+- Communication in sales → "English Comprehension", "Verbal Communication", "Interpersonal Communication"
+- Cultural fit for international → "Global Skills", "Cultural Assessment", "Cross-Cultural Competence"
+- Basic computer use → "Computer Literacy", "Basic Computer Skills", "Windows"
+- Writing content → "Written Communication", "Email Writing", "Content Writing"
+- Testing software manually → "Manual Testing", "Software Testing", "QA Fundamentals"
+- SEO knowledge → "Search Engine Optimization", "SEO", "Digital Marketing"
+- Data analysis → "Data Analysis", "Data Warehousing", "Statistical Analysis"
+- Java coding → "Java", "Core Java", "Java Development"
+- Leadership → "Leadership Skills", "Management Competencies", "Executive Leadership"
+- Entry-level aptitude → "Aptitude", "Learning Potential", "Cognitive Ability"
 
-**Step 3: Determine Job Level**
-- Analyze seniority indicators (years of experience, title, responsibilities)
-- Use Job Level Classification rules
-- Can return multiple levels if appropriate
-- Consider: Graduate, Mid-Professional, Senior, Executive
+EXAMPLES:
 
-**Step 4: Extract Duration Constraint**
-- Look for time mentions: "30 minutes", "1 hour", "at most 90 minutes", "quick test", "comprehensive assessment"
-- Convert to minutes (integer)
-- Return null if not specified
+Example 1: "Sales role for new graduates"
+- Identified needs: Communication (implicit), Sales skills, Learning potential
+- Assessment search terms: ["English Comprehension", "Verbal Communication", "Sales Aptitude", "Learning Potential", "Interpersonal Communication"]
+- Reasoning: Sales = heavy communication → Assessment would be called "English Comprehension" not "language proficiency"
 
-**Step 5: Determine Required Test Types**
-- Use the Test Type Classification Rules from your instructions
-- Map requirements to test types: K, P, A, C, B, S, E
-- Consider ALL relevant test types based on requirements
-- Technical skills → Knowledge & Skills (K)
-- Soft skills → Personality & Behavior (P)
-- Cognitive requirements → Ability & Aptitude (A)
-- Leadership → Competencies (C)
+Example 2: "COO in China, cultural fit important"
+- Identified needs: Cultural awareness (explicit), Leadership, Cross-cultural skills
+- Assessment search terms: ["Global Skills", "Cultural Competence", "Cross-Cultural Assessment", "Executive Leadership", "International Management"]
+- Reasoning: "Cultural fit" → Assessment would be called "Global Skills" not "cultural awareness"
 
-**Step 6: Identify Key Requirements**
-- Extract 5-10 most critical requirements
-- Prioritize requirements that drive assessment selection
-- Include both technical and behavioral requirements
+Example 3: "Bank Assistant Admin, 0-2 years"
+- Identified needs: Computer use (implicit), Office work, Admin skills
+- Assessment search terms: ["Computer Literacy", "Basic Computer Skills", "Windows", "Office Software", "Data Entry", "Administrative Skills"]
+- Reasoning: Bank admin needs computers → Assessment would be called "Computer Literacy" not "basic computer literacy"
 
-**Step 7: Create Cleaned Query**
-- Remove filler words and redundancy
-- Keep essential requirements
-- Maintain all critical skills and competencies
-- Make it concise but complete
+Example 4: "Content Writer expert in SEO"
+- Identified needs: Writing, SEO (explicit), English
+- Assessment search terms: ["Search Engine Optimization", "SEO", "Content Writing", "Written Communication", "English Grammar", "Copywriting"]
+- Reasoning: "SEO" explicitly mentioned → Use exact term "Search Engine Optimization" and "SEO"
 
-Return JSON in this exact format (note the escaped braces):
+Example 5: "QA Engineer, Selenium, manual testing"
+- Identified needs: Manual testing foundation, Automation, QA skills
+- Assessment search terms: ["Manual Testing", "Software Testing", "QA Fundamentals", "Selenium", "Test Automation", "Test Design"]
+- Reasoning: Manual testing mentioned → Assessment would be called "Manual Testing" not "test case design"
+
+NOW PROCESS THIS QUERY:
+
+Query: {jd_text}
+
+Step 1: List implicit + explicit skill needs
+Step 2: For EACH skill, write what the ASSESSMENT would be called (not the skill name)
+Step 3: Build cleaned query using assessment terminology
+
+OUTPUT (valid JSON only, no markdown):
+
 {{{{
-  "original_query": "the original text",
-  "cleaned_query": "cleaned, concise version with all key requirements",
-  "extracted_skills": ["skill1 with related terms", "skill2 with ecosystem"],
-  "extracted_duration": null or integer in minutes,
-  "extracted_job_levels": ["level1", "level2"],
-  "required_test_types": ["K", "P", "A"],
-  "key_requirements": ["requirement1", "requirement2"]
+  "original_query": "{jd_text}",
+  "cleaned_query": "Job requirements using assessment terminology: [list assessment-style terms]",
+  "extracted_skills": [
+    "Assessment Term 1 (e.g., 'English Comprehension' not 'language proficiency')",
+    "Assessment Term 2 (e.g., 'Computer Literacy' not 'basic computer skills')",
+    "Assessment Term 3"
+  ],
+  "extracted_duration": null or integer,
+  "extracted_job_levels": ["Entry-Professional"],
+  "required_test_types": ["K", "A", "P"],
+  "key_requirements": [
+    "Requirement 1 in assessment terminology",
+    "Requirement 2 in assessment terminology"
+  ]
 }}}}
 
-**Important**:
-- Be thorough in skill extraction - use the comprehensive mappings
-- Include related terms and technologies in extracted_skills
-- Don't miss any test type that could be relevant
-- Prioritize accuracy over brevity
+CRITICAL RULES:
+1. Use assessment catalog terminology, NOT HR/generic terms
+2. Think: "What would this assessment be CALLED?" not "What skill is needed?"
+3. For implicit needs, still use assessment terminology
+4. Be specific: "English Comprehension" beats "communication"
+5. Include synonyms: ["Global Skills", "Cultural Competence", "Cross-Cultural Assessment"]
 
-Respond with ONLY the JSON object, no additional text."""
+Respond with JSON only.
+"""
 
+URL_EXTRACTION_PROMPT = """Extract URLs from text.
 
-QUERY_ENHANCEMENT_PROMPT = """Enhance this query for better assessment retrieval using the comprehensive skill mappings in your system instructions.
+Text: {query}
 
-Original Query:
-{query}
+Return JSON: {{"has_url": true/false, "urls": ["url1"], "primary_url": "url"}}
 
-Your task:
+JSON only."""
 
-1. **Expand Technical Terms**
-   - Use Programming Languages & Technology Mapping
-   - Add related frameworks, tools, ecosystems
-   - Example: "React" → "React.js, React framework, JSX, hooks, component architecture, state management, Redux, frontend development"
+JD_EXTRACTOR_SYSTEM_INSTRUCTION = """You extract URLs from queries."""
 
-2. **Expand Soft Skills**
-   - Use Soft Skills & Behavioral Competencies Mapping
-   - Add related behavioral traits and competencies
-   - Example: "communication" → "verbal communication, written communication, presentation skills, stakeholder communication, interpersonal skills"
+QUERY_ENHANCEMENT_PROMPT = """Enhance this query with assessment catalog terminology.
 
-3. **Add Domain Context**
-   - Include industry-standard terminology
-   - Add assessment-relevant vocabulary
-   - Example: "data analysis" → "data analytics, business intelligence, data visualization, statistical analysis, reporting, dashboards"
+Original: {query}
 
-4. **Include Synonyms & Variations**
-   - Add common abbreviations and expansions
-   - Example: "JavaScript" → "JavaScript, JS, ECMAScript, Node.js"
+Add assessment-style terms:
+- For communication → add "English Comprehension", "Verbal Communication", "Interpersonal Communication"
+- For cultural fit → add "Global Skills", "Cultural Competence"
+- For computer use → add "Computer Literacy", "Windows", "Office Software"
+- For technical skills → use exact names: "Java", "Python", "SQL"
 
-5. **Add Testing Context**
-   - Include assessment-related terms
-   - Example: "Python" → "Python assessment, Python evaluation, Python test, Python proficiency"
-
-**Guidelines**:
-- Keep expansions relevant and realistic
-- Focus on terms that appear in assessment descriptions
-- Add 3-5 related terms per major skill
-- Balance technical depth with breadth
-- Don't add unrelated skills
-
-Enhanced Query (comprehensive paragraph with all expansions):"""
-
-
-def get_url_extraction_prompt(query: str) -> str:
-    """Generate URL extraction prompt"""
-    return URL_EXTRACTION_PROMPT.format(query=query)
-
+Enhanced query (use assessment terminology):
+"""
 
 def get_jd_enhancement_prompt(jd_text: str) -> str:
-    """Generate JD enhancement prompt"""
     return JD_ENHANCEMENT_PROMPT.format(jd_text=jd_text)
 
-
 def get_query_enhancement_prompt(query: str) -> str:
-    """Generate query enhancement prompt"""
     return QUERY_ENHANCEMENT_PROMPT.format(query=query)
+
+def get_url_extraction_prompt(query: str) -> str:
+    return URL_EXTRACTION_PROMPT.format(query=query)
