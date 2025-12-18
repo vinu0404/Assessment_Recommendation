@@ -137,7 +137,7 @@ default_avatar_file_url = ""
     name = "GitHub"
     display_name = "GitHub Repo"
     icon_url = "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
-    url = "https://github.com/vinu0404/SHL.git"
+    url = "https://github.com/vinu0404/Assessment_Recommendation.git"
 
 [meta]
 generated_by = "2.8.1"
